@@ -25,20 +25,26 @@ router.post('/sign-up', async (req, res) => {
       return res.send('Username already taken.');
     }
   
-    // Username is not taken already!
-    // Check if the password and confirm password match
+    // Check if password and confirm password match
     if (req.body.password !== req.body.confirmPassword) {
       return res.send('Password and Confirm Password must match');
     }
   
-    // Must hash the password before sending to the database
+    // Hash the password
     const hashedPassword = bcrypt.hashSync(req.body.password, 10);
     req.body.password = hashedPassword;
   
-    // All ready to create the new user!
-    await User.create(req.body);
-  
-    res.redirect('/auth/sign-in');
+    // Create the new user
+    const newUser = await User.create(req.body);
+
+    // Automatically log in the new user by creating a session
+    req.session.user = {
+      username: newUser.username,
+      _id: newUser._id
+    };
+
+    // Redirect directly to the user's pantry
+    res.redirect(`/users/${newUser._id}/foods`);
   } catch (error) {
     console.log(error);
     res.redirect('/');
@@ -47,13 +53,13 @@ router.post('/sign-up', async (req, res) => {
 
 router.post('/sign-in', async (req, res) => {
   try {
-    // First, get the user from the database
+    // Get the user from the database
     const userInDatabase = await User.findOne({ username: req.body.username });
     if (!userInDatabase) {
       return res.send('Login failed. Please try again.');
     }
   
-    // There is a user! Time to test their password with bcrypt
+    // Test their password
     const validPassword = bcrypt.compareSync(
       req.body.password,
       userInDatabase.password
@@ -62,15 +68,14 @@ router.post('/sign-in', async (req, res) => {
       return res.send('Login failed. Please try again.');
     }
   
-    // There is a user AND they had the correct password. Time to make a session!
-    // Avoid storing the password, even in hashed format, in the session
-    // If there is other data you want to save to `req.session.user`, do so here!
+    // Create session (do not store password)
     req.session.user = {
       username: userInDatabase.username,
       _id: userInDatabase._id
     };
   
-    res.redirect('/');
+    // Redirect directly to the user's pantry
+    res.redirect(`/users/${userInDatabase._id}/foods`);
   } catch (error) {
     console.log(error);
     res.redirect('/');
@@ -78,3 +83,5 @@ router.post('/sign-in', async (req, res) => {
 });
 
 module.exports = router;
+
+
